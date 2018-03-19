@@ -11,3 +11,5 @@ bool getSocket(int* const fd);
 bool socketBind(int* const fd, int* const res);
 
 SocketDriver getSocketDriver();
+
+void closeSocketDriver(SocketDriver* s);

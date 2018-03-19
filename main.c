@@ -2,10 +2,11 @@
 #include "SocketDriver.h"
 #include "debug.h"
 
-int main() {
+int main(int argc, char**argv) {
 	printf("Starting driver main().\n");
 	SocketDriver driver = getSocketDriver();
-
-	printf("\nCompleted driver main().\n");
+	printf("SocketDriver acquired\n");
+	closeSocketDriver(&driver);
+	printf("Completed driver main().\n");
 	return 0;
 }
