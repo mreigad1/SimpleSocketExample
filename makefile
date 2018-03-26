@@ -17,7 +17,6 @@ NEW_TERM_CMD=--command=
 
 default_user:
 	./setUser.sh User_$(shell bash -c 'echo $$RANDOM') ${USER_FILE}
-	USER_NAME=$(shell bash -c 'cat ${USER_FILE}')
 
 ${SOCKET_TEST}:
 	gcc -std=c99 main.c SocketDriver.c server.c client.c -o ${SOCKET_TEST}
@@ -26,8 +25,7 @@ ${READER_APP}:
 	gcc -std=c99 reader.c -o ${READER_APP}
 
 ${CLIENT_APP}: default_user ${READER_APP}
-	USER_NAME=$(shell bash -c 'cat ${USER_FILE}')
-	${NEW_TERMINAL} ${NEW_TERM_CMD}"./${READER_APP} ${OUTGOING_FILE} matt"
+	${NEW_TERMINAL} ${NEW_TERM_CMD}"./${READER_APP} ${OUTGOING_FILE} $(shell bash -c 'cat ${USER_FILE}')"
 
 
 clean:
