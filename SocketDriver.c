@@ -70,7 +70,7 @@ SocketDriver getSocketDriver() {
 	return rv;
 }
 
-void closeSocketDriver(SocketDriver* s) {
+void closeSocketDriver(SocketDriver* const s) {
 	ASSERT(s);
 	ASSERT(s->fd >= 0);
 	close(s->fd);
