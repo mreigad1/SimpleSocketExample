@@ -1,7 +1,8 @@
 
 SOCKET_TEST=test_driver
-READER_APP=reader
-PROGRAM_LIST=${SOCKET_TEST} ${READER_APP}
+READER_PROG=reader
+WRITER_PROG=reader
+PROGRAM_LIST=${SOCKET_TEST} ${READER_PROG}
 
 CLIENT_APP=client
 SERVER_APP=server
@@ -21,11 +22,14 @@ default_user:
 ${SOCKET_TEST}:
 	gcc -std=c99 main.c SocketDriver.c server.c client.c -o ${SOCKET_TEST}
 
-${READER_APP}:
-	gcc -std=c99 reader.c -o ${READER_APP}
+${READER_PROG}:
+	gcc -std=c99 ${READER_PROG}.c -o ${READER_PROG}
 
-${CLIENT_APP}: default_user ${READER_APP}
-	${NEW_TERMINAL} ${NEW_TERM_CMD}"./${READER_APP} ${OUTGOING_FILE} $(shell bash -c 'cat ${USER_FILE}')"
+${WRITER_PROG}:
+	gcc -std=c99 ${WRITER_PROG}.c -o ${WRITER_PROG}
+
+${CLIENT_APP}: default_user ${READER_PROG}
+	${NEW_TERMINAL} ${NEW_TERM_CMD}"./${READER_PROG} ${OUTGOING_FILE} $(shell bash -c 'cat ${USER_FILE}')"
 
 
 clean:
