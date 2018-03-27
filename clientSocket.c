@@ -7,11 +7,15 @@
 #include <pthread.h>
 #include "debug.h"
 
+//maximum expected path length and max size of inotify buffer to read
 #define PATH_MAX (1 << 10)
 #define INOT_BUF_SIZE (sizeof(struct inotify_event) + PATH_MAX + 1)
 
 char* outgoingFile = NULL;
 char* incomingFile = NULL; 
+char* serverIPAddress = NULL;
+const int numIPComps = 4;
+unsigned int ipComponents[numIPComps] = { -1, -1, -1, -1 };
 
 typedef struct {
 	int fd;
@@ -20,6 +24,7 @@ typedef struct {
 
 typedef struct inotify_event watcherEvent;
 
+//function gets struct instance of user input watcher
 inotifyWatcher getWatcher(char* fileName) {
 	inotifyWatcher retVal;				//struct containing file and watch descriptors
 	retVal.fd = inotify_init();			//file descriptor of inotify instance
@@ -35,12 +40,14 @@ inotifyWatcher getWatcher(char* fileName) {
 	return retVal;
 }
 
+//function handles notification when user input file has been updated
 void handleEvent(watcherEvent* event) {
-	printf("Event received.\n");
-	fflush(stdout);
+	
 }
 
-void outgoingThreadDriver() {
+//driver function for thread
+//managing outgoing socket comms
+void outgoingThreadDriver(void* unused) {
 	inotifyWatcher watcher = getWatcher(outgoingFile);			//get watcher descriptors
 	while (true) {												//loop forever
 		char buffer[INOT_BUF_SIZE] = { 0 };						//stack buffer for input
@@ -54,22 +61,56 @@ void outgoingThreadDriver() {
 	}
 }
 
-void incomingThreadDriver() {
-	
+//driver function for thread
+//managing incoming socket comms
+void incomingThreadDriver(void* unused) {
+
 }
 
+//driven by main to parse input args
 //argv[0] prog name
 //argv[1] outgoingFile name
 //argv[2] incomingFile name
-int main(int argc, char** argv) {
+//argv[3] server IP address
+void parseCmdArgs(int argc, char** argv) {
 	outgoingFile = argv[1];
 	incomingFile = argv[2];
+	serverIPAddress = arg[3];
 
 	ASSERT(3 == argc);
 	ASSERT(NULL != argv[1]);
 	ASSERT(NULL != argv[2]);
+	ASSERT(NULL != argv[3]);
 
-	outgoingThreadDriver();
+	int ipCompCounter = 0;
+	char* subComp = strtok(serverIPAddress, ".");
+	while (subComp != NULL) {
+		ASSERT(numIPComps > ipCompCounter);
+		ipComponents[ipCompCounter++] = atoi(subComp);
+		subComp = strtok(NULL, ".");
+	}
 
+	for (ipCompCounter = 0; ipCompCounter < numIPComps; ipCompCounter++) {
+		ASSERT(0 <= ipComponents[ipCompCounter]);
+	}
+}
+
+void deployThreads() {
+	pthread_t outgoingThread;
+	//pthread_t incomingThread;
+
+ 	/* create threads 1 and 2 */    
+    pthread_create (&outgoingThread, NULL, (void *) &outgoingThreadDriver, NULL);
+    //pthread_create (&incomingThread, NULL, (void *) &incomingThreadDriver, NULL);
+
+    //put main thread to sleep while children threads handle execution
+    //while(1) { sleep(10); }
+
+    incomingThreadDriver(NULL);
+}
+
+int main(int argc, char** argv) {
+	parseCmdArgs(argc, argv);
+	deployThreads();
 	return 0;
 }

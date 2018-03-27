@@ -27,7 +27,7 @@ ${READER_PROG}:
 	gcc -std=c99 ${READER_PROG}.c -o ${READER_PROG}
 
 ${CLIENT_SOCKET_PROG}:
-	gcc -std=c99 ${CLIENT_SOCKET_PROG}.c -o ${CLIENT_SOCKET_PROG}
+	gcc -std=c99 -pthread ${CLIENT_SOCKET_PROG}.c -lpthread -o ${CLIENT_SOCKET_PROG}
 
 ${WRITER_PROG}:
 	gcc -std=c99 ${WRITER_PROG}.c -o ${WRITER_PROG}
