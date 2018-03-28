@@ -13,6 +13,8 @@
 			printf( STR(X) );			  \
 			printf( " at Line = " );	  \
 			printf( XSTR(__LINE__) );	  \
+			printf( " in file ");		  \
+			printf( XSTR(__FILE__));	  \
 			printf( " with errno =  " );  \
 			printf( "%d\n", errno );	  \
 			HANDLER ;					  \
