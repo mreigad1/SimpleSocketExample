@@ -1,9 +1,13 @@
+#include <pthread.h>
+#include <netinet/in.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "SocketDriver.h"
 #include "debug.h"
 #include "universe.h"
@@ -30,7 +34,7 @@
 //*****************************************************************************************************************
 bool getSocket(int* const fd, int* const sockoptval);
 bool socketBind(SocketDriver* const s);
-void serverServiceAccept(const int fd);
+void serverServiceAccept(const int fd, pthread_func_t serviceRoutine);
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
@@ -51,10 +55,9 @@ static const int g_bufferSize = 4096;
 //**************************************    GENERAL DRIVER CODE    ************************************************
 //*****************************************************************************************************************
 //*****************************************************************************************************************
-SocketDriver getSocketDriver() {
+SocketDriver getSocketDriver(void) {
 	SocketDriver rv = { 0 };	//if field later unspecified, default all zeroes
 	rv.fd = -1;					//specify each field with
-	rv.bindRes = -1;			//explicit default value
 	rv.sockoptval = -1;
 	rv.socketData = NULL;
 	socketBind(&rv);
@@ -65,6 +68,10 @@ void closeSocketDriver(SocketDriver* const s) {
 	ASSERT(s);
 	ASSERT(s->fd >= 0);
 	close(s->fd);
+	if (s->socketData) {
+		free(s->socketData);
+		s->socketData = NULL;
+	}
 }
 
 // @Procedure - opens socket and provides file descriptor
@@ -116,24 +123,27 @@ bool socketBind(SocketDriver* const s) {
 		&s->sockoptval
 	);
 	ERROR_IF (false == getSocketSuccess);						//error if socket not acquired
-	struct sockaddr_in* sockInfo = malloc(sizeof(sockaddr_in));	//allocate sockaddr info and assign data to instance
+	struct sockaddr_in* sockInfo = malloc(						//allocate sockaddr info and assign data to instance
+		sizeof(struct sockaddr_in)
+	);
 	ASSERT(NULL != sockInfo);									//check that buffer was successfully acquired
 	sockInfo->sin_family = g_domain;							//assign values
 	sockInfo->sin_addr.s_addr = htonl(INADDR_ANY);
 	#ifdef IS_SERVER
-		sockInfo->sin_port = SERVER_PORT_NO;					//if server then use server port num
+		int portToUse = SERVER_PORT_NO;							//if server then use server port num
 	#else
-		sockInfo->sin_port = htons(0);							//else use OS assigned port
+		int portToUse = 0;										//else use OS assigned port
 	#endif
+	sockInfo->sin_port = htons(portToUse);
 
 	bindResult = bind(											//attempt socket binding
 		socketResult,
-		sockInfo,
-		sizeof(sockInfo)
-	);	
-	ERROR_IF (bindResult < 0);									//error if socket fails binding	
-	(*s) = { socketResult, bindResult, (sockaddr*)sockInfo };	//reaching this point means success,
-																//return intermediate values to input struct
+		(struct sockaddr*)sockInfo,
+		sizeof(*sockInfo)
+	);
+	ASSERT(0 == bindResult);									//error if socket fails binding	
+	s->fd = socketResult;										//reaching this point means success,
+	s->socketData = (struct sockaddr*)sockInfo;
 
 	doReturn:
 		
@@ -154,17 +164,17 @@ bool socketBind(SocketDriver* const s) {
 		ASSERT(s);														//verify inputs valid
 		ASSERT(ipComponents);
 		bool rv = true;													//assume success
-		const int numIPComponents = NUM_IP_COMPS;						//number of components in IPv4
-		char* sin_addr = &(((sockaddr_in*)s->socketData)->sin_addr);	//take address of buffer for memcpy
-		unsigned char ipCastdown[numIPComponents] = { 					//convenient casting array for copying ip address
+		struct sockaddr_in* tmp_sock_in = (struct sockaddr_in*)s->socketData;
+		void* sin_addr = &(tmp_sock_in->sin_addr);						//take address of buffer for memcpy
+		unsigned char ipCastdown[NUM_IP_COMPS] = {	 					//convenient casting array for copying ip address
 			ipComponents[0],
 			ipComponents[1],
 			ipComponents[2],
 			ipComponents[3]
 		};
-		memcpy(sin_addr, ipCastdown, numIPComponents);					//copy ip address into struct
-		if (0 != connect(s->fd, s->socketData, sizeof(sockaddr_in))) {	
-			memset(sin_addr, 0, numIPComponents);						//on failure to connect, wipe buffer
+		memcpy(sin_addr, ipCastdown, NUM_IP_COMPS);						//copy ip address into struct
+		if (0 != connect(s->fd, s->socketData, sizeof(struct sockaddr_in))) {	
+			memset(sin_addr, 0, NUM_IP_COMPS);							//on failure to connect, wipe buffer
 			rv = false;													//flag ret val to failure
 		}
 		return rv;
@@ -186,14 +196,17 @@ bool socketBind(SocketDriver* const s) {
 			return rv;
 	}
 
-	void serverListenLoop(SocketDriver* const s) {
+	void serverListenLoop(SocketDriver* const s, pthread_func_t serviceRoutine) {
+		ASSERT(s);														//check valid inputs
+		ASSERT(serviceRoutine);
 		while (true) {
 			int requestDescriptor = -1;									//file descriptor of next issued accept
+			socklen_t addrLen = sizeof(struct sockaddr_in);
 			do {
 				requestDescriptor = accept(								//attempt to accept next
-					svc,
-					(struct sockaddr *)&client_addr,
-					&alen
+					s->fd,
+					s->socketData,
+					&addrLen
 				);
 				if (requestDescriptor < 0) {							//broke accept for error 
 					const int error = errno;							//capture error number
@@ -214,7 +227,7 @@ bool socketBind(SocketDriver* const s) {
 					}
 					if (false == isAcceptableError) {					//if not tolerated error then display error and die
 						fprintf(
-							cerr,
+							stderr,
 							"accept failed for error number: %d",
 							error
 						);
@@ -222,7 +235,7 @@ bool socketBind(SocketDriver* const s) {
 					}
 				}
 			} while (requestDescriptor < 0);
-				serverServiceAccept(requestDescriptor);					//new valid accept received, service it
+				serverServiceAccept(requestDescriptor, serviceRoutine);	//new valid accept received, service it
 		}
 	}
 
@@ -230,7 +243,20 @@ bool socketBind(SocketDriver* const s) {
 	//              services and manages newly accepted socket
 	// @return - None
 	// @param[fd] - file descriptor of new request
-	void serverServiceAccept(const int fd) {
-		clientNode* newNode = (clientNode)malloc(sizeof(clientNode));
+	// @param[serviceRoutine] - routine to fork pthread accept service threads into
+	void serverServiceAccept(const int fd, pthread_func_t serviceRoutine) {
+		ASSERT(fd >= 0);									//check valid inputs
+		ASSERT(serviceRoutine);
+		clientNode* newNode = malloc(sizeof(clientNode));	//allocate new clientNode
+		newNode->socketFD = fd;								//set file descriptor
+		newNode->next = clientList;
+		clientList = newNode;								//move new clientNode to head of clientList
+
+		pthread_create(										//fork new thread to serve client
+			&newNode->servicingThread,
+			NULL,
+			serviceRoutine,
+			&newNode->socketFD								//file descriptor
+		);
 	}
 #endif

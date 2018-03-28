@@ -7,6 +7,7 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include <pthread.h>
+#include "SocketDriver.h"
 #include "debug.h"
 #include "universe.h"
 
@@ -48,6 +49,7 @@ char* outgoingFile = NULL;
 char* incomingFile = NULL; 
 char* serverIPAddress = NULL;
 int ipComponents[NUM_IP_COMPS] = { -1, -1, -1, -1 };
+SocketDriver mySocket = { 0 };
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
@@ -73,7 +75,12 @@ inotifyWatcher getWatcher(char* fileName) {
 
 //function handles notification when user input file has been updated
 void handleEvent(watcherEvent* event) {
-	ASSERT(NULL != event);
+	ASSERT(NULL != event);							//confirm event is good
+	char buffer[BUF_SIZE] = { 0 };					//zero out buffer
+	FILE* sendingFile = fopen(outgoingFile, "r");	//open file
+	fgets(buffer, sizeof(buffer) - 1, sendingFile);	//get contents
+	fclose(sendingFile);							//close file
+	write(mySocket.fd, buffer, sizeof(buffer) - 1);	//write file to socket
 }
 
 //driver function for thread
@@ -98,6 +105,14 @@ void* outgoingThreadDriver(void* unused) {
 //managing incoming socket comms
 void* incomingThreadDriver(void* unused) {
 	ASSERT(NULL == unused);
+
+	char buffer[BUF_SIZE];
+	while (true) {
+		memset(buffer, 0, sizeof(buffer));				//clear buffer
+		read(mySocket.fd, buffer, sizeof(buffer) - 1);	//read in buffer
+		printf("%s\n", buffer);							//print buffer contents
+	}
+
 	return NULL;
 }
 
@@ -130,23 +145,25 @@ void parseCmdArgs(int argc, char** argv) {
 }
 
 void deployThreads(void) {
-	pthread_t outgoingThread;
-	//pthread_t incomingThread;
+	//pthread_t outgoingThread;
+	pthread_t incomingThread;
 
-	pthread_func_t outgoingDriver = outgoingThreadDriver;
+	pthread_func_t outgoingDriver = outgoingThreadDriver;			//thread driver sends messages to server
+	pthread_func_t incomingDriver = incomingThreadDriver;			//thread driver reads messages from server
 
- 	/* create threads 1 and 2 */    
-    pthread_create (&outgoingThread, NULL, outgoingDriver, NULL);
-    //pthread_create (&incomingThread, NULL, (void *) &incomingThreadDriver, NULL);
-
-    //put main thread to sleep while children threads handle execution
-    //while(1) { sleep(10); }
-
-    incomingThreadDriver(NULL);
+	pthread_create(&incomingThread, NULL, incomingDriver, NULL);	//launch thread for incoming messages
+	outgoingDriver(NULL);											//launch thread for outgoing messages
 }
 
 int main(int argc, char** argv) {
 	parseCmdArgs(argc, argv);
+
+	mySocket = getSocketDriver();
+	ASSERT(mySocket.fd >= 0);
+	ASSERT(NULL != mySocket.socketData);
+	ASSERT(clientConnect(&mySocket, ipComponents));
 	deployThreads();
+	closeSocketDriver(&mySocket);
+
 	return 0;
 }

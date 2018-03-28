@@ -4,7 +4,7 @@
 	#define UNIVERSE_H
 	#define NUM_IP_COMPS		4
 	#define BUF_SIZE			255
-	#define SERVER_PORT_NO		80
+	#define SERVER_PORT_NO		1234
 	#define PATH_MAX            (1 << 10)
 	#define INOT_BUF_SIZE       (sizeof(struct inotify_event) + PATH_MAX + 1)
 

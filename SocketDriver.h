@@ -8,7 +8,6 @@ struct sockaddr;
 //socket binding functions
 typedef struct {
 	int fd;
-	int bindRes;
 	int sockoptval;
 	struct sockaddr* socketData;
 } SocketDriver;
@@ -16,7 +15,7 @@ typedef struct {
 // @Procedure - opens socket and returns socket data
 // @return - struct containing socket information
 //           on failure, all struct fields <= 0
-SocketDriver getSocketDriver();
+SocketDriver getSocketDriver(void);
 
 // @Procedure - closes socket
 // @param[s] - socket driver struct containing
@@ -38,6 +37,9 @@ void closeSocketDriver(SocketDriver* const s);
 	// @Procedure - enters server into listening state
 	//              so that server may begin accepting
 	//              and servicing connections
+	// @param[s] - socket driver struct to drive the listen loop
+	// @param[serviceRoutine] - pthread_func_t type procedure to forward new accepted connections to.
+	//                          const int* containing fd forwarded as argument args to serviceRoutine
 	// @return - TBD
-	void serverListenLoop(SocketDriver* const s);
+	void serverListenLoop(SocketDriver* const s, pthread_func_t serviceRoutine);
 #endif
