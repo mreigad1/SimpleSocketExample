@@ -1,3 +1,5 @@
+#define _BSD_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,6 +8,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include "debug.h"
+#include "universe.h"
 
 //maximum expected path length and max size of inotify buffer to read
 #define PATH_MAX (1 << 10)
@@ -14,8 +17,7 @@
 char* outgoingFile = NULL;
 char* incomingFile = NULL; 
 char* serverIPAddress = NULL;
-const int numIPComps = 4;
-unsigned int ipComponents[numIPComps] = { -1, -1, -1, -1 };
+unsigned int ipComponents[NUM_IP_COMPS] = { -1, -1, -1, -1 };
 
 typedef struct {
 	int fd;
@@ -42,12 +44,12 @@ inotifyWatcher getWatcher(char* fileName) {
 
 //function handles notification when user input file has been updated
 void handleEvent(watcherEvent* event) {
-	
+
 }
 
 //driver function for thread
 //managing outgoing socket comms
-void outgoingThreadDriver(void* unused) {
+void* outgoingThreadDriver(void* unused) {
 	inotifyWatcher watcher = getWatcher(outgoingFile);			//get watcher descriptors
 	while (true) {												//loop forever
 		char buffer[INOT_BUF_SIZE] = { 0 };						//stack buffer for input
@@ -59,12 +61,14 @@ void outgoingThreadDriver(void* unused) {
 			printf("Error at line %d, bytesRead = %d, sizeof(watcherEvent) = %d\n", __LINE__, bytesRead, (int)sizeof(watcherEvent));
 		}
 	}
+	return NULL;
 }
 
 //driver function for thread
 //managing incoming socket comms
-void incomingThreadDriver(void* unused) {
+void* incomingThreadDriver(void* unused) {
 
+	return NULL;
 }
 
 //driven by main to parse input args
@@ -75,9 +79,9 @@ void incomingThreadDriver(void* unused) {
 void parseCmdArgs(int argc, char** argv) {
 	outgoingFile = argv[1];
 	incomingFile = argv[2];
-	serverIPAddress = arg[3];
+	serverIPAddress = argv[3];
 
-	ASSERT(3 == argc);
+	ASSERT(4 == argc);
 	ASSERT(NULL != argv[1]);
 	ASSERT(NULL != argv[2]);
 	ASSERT(NULL != argv[3]);
@@ -85,12 +89,12 @@ void parseCmdArgs(int argc, char** argv) {
 	int ipCompCounter = 0;
 	char* subComp = strtok(serverIPAddress, ".");
 	while (subComp != NULL) {
-		ASSERT(numIPComps > ipCompCounter);
+		ASSERT(NUM_IP_COMPS > ipCompCounter);
 		ipComponents[ipCompCounter++] = atoi(subComp);
 		subComp = strtok(NULL, ".");
 	}
 
-	for (ipCompCounter = 0; ipCompCounter < numIPComps; ipCompCounter++) {
+	for (ipCompCounter = 0; ipCompCounter < NUM_IP_COMPS; ipCompCounter++) {
 		ASSERT(0 <= ipComponents[ipCompCounter]);
 	}
 }
@@ -99,8 +103,10 @@ void deployThreads() {
 	pthread_t outgoingThread;
 	//pthread_t incomingThread;
 
+	pthread_func_t outgoingDriver = outgoingThreadDriver;
+
  	/* create threads 1 and 2 */    
-    pthread_create (&outgoingThread, NULL, (void *) &outgoingThreadDriver, NULL);
+    pthread_create (&outgoingThread, NULL, outgoingDriver, NULL);
     //pthread_create (&incomingThread, NULL, (void *) &incomingThreadDriver, NULL);
 
     //put main thread to sleep while children threads handle execution

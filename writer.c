@@ -4,6 +4,7 @@
 #include <sys/inotify.h>
 #include <unistd.h>
 #include "debug.h"
+#include "universe.h"
 
 int main() {
 

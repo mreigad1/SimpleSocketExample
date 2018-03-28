@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "SocketDriver.h"
 #include "debug.h"
+#include "universe.h"
 
 int main(int argc, char**argv) {
 	printf("Starting driver main().\n");

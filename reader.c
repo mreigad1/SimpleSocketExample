@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "debug.h"
+#include "universe.h"
 
 char globalBuf[BUF_SIZE + 1];
 
