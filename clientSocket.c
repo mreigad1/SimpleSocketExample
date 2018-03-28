@@ -10,21 +10,50 @@
 #include "debug.h"
 #include "universe.h"
 
-//maximum expected path length and max size of inotify buffer to read
-#define PATH_MAX (1 << 10)
-#define INOT_BUF_SIZE (sizeof(struct inotify_event) + PATH_MAX + 1)
-
-char* outgoingFile = NULL;
-char* incomingFile = NULL; 
-char* serverIPAddress = NULL;
-unsigned int ipComponents[NUM_IP_COMPS] = { -1, -1, -1, -1 };
-
+//*****************************************************************************************************************
+//*****************************************************************************************************************
+//**************************************    PROGRAM TYPES    ******************************************************
+//*****************************************************************************************************************
+//*****************************************************************************************************************
 typedef struct {
 	int fd;
 	int wd;
 } inotifyWatcher;
 
 typedef struct inotify_event watcherEvent;
+
+//*****************************************************************************************************************
+//*****************************************************************************************************************
+//**************************************    FUNCTION PROTOTYPES    ************************************************
+//*****************************************************************************************************************
+//*****************************************************************************************************************
+void deployThreads(void);
+
+void handleEvent(watcherEvent* event);
+
+void parseCmdArgs(int argc, char** argv);
+
+void* outgoingThreadDriver(void* unused);
+
+void* incomingThreadDriver(void* unused);
+
+inotifyWatcher getWatcher(char* fileName);
+
+//*****************************************************************************************************************
+//*****************************************************************************************************************
+//**************************************    PROGRAM GLOBALS    ****************************************************
+//*****************************************************************************************************************
+//*****************************************************************************************************************
+char* outgoingFile = NULL;
+char* incomingFile = NULL; 
+char* serverIPAddress = NULL;
+int ipComponents[NUM_IP_COMPS] = { -1, -1, -1, -1 };
+
+//*****************************************************************************************************************
+//*****************************************************************************************************************
+//************************************    FUNCTION IMPLEMENTATIONS    *********************************************
+//*****************************************************************************************************************
+//*****************************************************************************************************************
 
 //function gets struct instance of user input watcher
 inotifyWatcher getWatcher(char* fileName) {
@@ -44,12 +73,13 @@ inotifyWatcher getWatcher(char* fileName) {
 
 //function handles notification when user input file has been updated
 void handleEvent(watcherEvent* event) {
-
+	ASSERT(NULL != event);
 }
 
 //driver function for thread
 //managing outgoing socket comms
 void* outgoingThreadDriver(void* unused) {
+	ASSERT(NULL == unused);
 	inotifyWatcher watcher = getWatcher(outgoingFile);			//get watcher descriptors
 	while (true) {												//loop forever
 		char buffer[INOT_BUF_SIZE] = { 0 };						//stack buffer for input
@@ -67,7 +97,7 @@ void* outgoingThreadDriver(void* unused) {
 //driver function for thread
 //managing incoming socket comms
 void* incomingThreadDriver(void* unused) {
-
+	ASSERT(NULL == unused);
 	return NULL;
 }
 
@@ -99,7 +129,7 @@ void parseCmdArgs(int argc, char** argv) {
 	}
 }
 
-void deployThreads() {
+void deployThreads(void) {
 	pthread_t outgoingThread;
 	//pthread_t incomingThread;
 

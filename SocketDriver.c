@@ -231,6 +231,6 @@ bool socketBind(SocketDriver* const s) {
 	// @return - None
 	// @param[fd] - file descriptor of new request
 	void serverServiceAccept(const int fd) {
-		clientNode* newNode
+		clientNode* newNode = (clientNode)malloc(sizeof(clientNode));
 	}
 #endif
