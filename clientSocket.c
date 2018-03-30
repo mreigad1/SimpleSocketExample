@@ -80,7 +80,25 @@ void handleEvent(watcherEvent* event) {
 	FILE* sendingFile = fopen(outgoingFile, "r");	//open file
 	fgets(buffer, sizeof(buffer) - 1, sendingFile);	//get contents
 	fclose(sendingFile);							//close file
-	write(mySocket.fd, buffer, sizeof(buffer) - 1);	//write file to socket
+
+	const int trySending_ms = 250;
+	bool trySending = true;
+	while (trySending) {
+		ssize_t sentCode = send(					//try sending
+			mySocket.fd,
+			buffer,
+			sizeof(buffer) - 1,
+			MSG_DONTWAIT
+		);
+		trySending = false;
+		if (-1 == sentCode) {						//on failure
+			trySending ||= (EAGAIN == errno);		//check if keep attempting
+			trySending ||= (EWOULDBLOCK == errno);
+		}
+		if (trySending) {							//wait before reattempting
+			usleep(trySending_ms * 1000);
+		}
+	}
 }
 
 //driver function for thread
@@ -109,7 +127,14 @@ void* incomingThreadDriver(void* unused) {
 	char buffer[BUF_SIZE];
 	while (true) {
 		memset(buffer, 0, sizeof(buffer));				//clear buffer
-		read(mySocket.fd, buffer, sizeof(buffer) - 1);	//read in buffer
+		const int tryReceiving_ms = 250;
+		ssize_t recvCode = recv(
+			mySocket.fd,
+			buffer,
+			sizeof(buffer) - 1,
+			MSG_DONTWAIT
+		);												//read in buffer
+
 		printf("%s\n", buffer);							//print buffer contents
 	}
 
@@ -152,7 +177,10 @@ void deployThreads(void) {
 	pthread_func_t incomingDriver = incomingThreadDriver;			//thread driver reads messages from server
 
 	pthread_create(&incomingThread, NULL, incomingDriver, NULL);	//launch thread for incoming messages
-	outgoingDriver(NULL);											//launch thread for outgoing messages
+	pthread_create(&incomingThread, NULL, outgoingDriver, NULL);	//launch thread for outgoing messages
+
+	pthread_join(&incomingThread, NULL);							//wait for incoming thread to terminate
+	pthread_join(&outgoingThread, NULL);							//wait for incoming thread to terminate
 }
 
 int main(int argc, char** argv) {

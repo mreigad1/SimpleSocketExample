@@ -10,6 +10,9 @@ typedef struct {
 	int fd;
 	int sockoptval;
 	struct sockaddr* socketData;
+	#ifndef IS_SERVER
+		struct sockaddr* serverData;
+	#endif
 } SocketDriver;
 
 // @Procedure - opens socket and returns socket data
@@ -29,6 +32,25 @@ void closeSocketDriver(SocketDriver* const s);
 #endif
 
 #ifdef IS_SERVER
+
+	//struct representing data to be written to all client sockets
+	typedef struct {
+		void* data;
+		size_t dataLength;
+	} writeData_t;
+
+	//struct representing data to be passed to service routine,
+	//and forwarded to method to write to all clients after population
+	typedef struct {
+		int fd;
+		writeData_t outData;
+	} listenLoopRoutineArgs_t;
+
+	// @Procedure - sets socket to listen for
+	//              incoming connections
+	// @return - true on success, false on failure
+	void writeToAllClients(listenLoopRoutineArgs_t* const outgoing);
+
 	// @Procedure - sets socket to listen for
 	//              incoming connections
 	// @return - true on success, false on failure
@@ -39,7 +61,9 @@ void closeSocketDriver(SocketDriver* const s);
 	//              and servicing connections
 	// @param[s] - socket driver struct to drive the listen loop
 	// @param[serviceRoutine] - pthread_func_t type procedure to forward new accepted connections to.
-	//                          const int* containing fd forwarded as argument args to serviceRoutine
+	//                          listenLoopRoutineArgs_t to be passed to serviceRoutine containing fd
+	//                          of the client writing to server, rest of struct to be populated by
+	//                          serviceRoutine before forwarding to writeToAllClients
 	// @return - TBD
 	void serverListenLoop(SocketDriver* const s, pthread_func_t serviceRoutine);
 #endif

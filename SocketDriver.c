@@ -42,12 +42,13 @@ void serverServiceAccept(const int fd, pthread_func_t serviceRoutine);
 //*****************************************************************************************************************
 //*****************************************************************************************************************
 static const int g_domain = AF_INET;
-static const int g_type = SOCK_STREAM;
+static const int g_type = SOCK_STREAM | SOCK_NONBLOCK;
 static const int g_protocol = 0;
 static const int g_bufferSize = 4096;
 
 #ifdef IS_SERVER
-	clientNode* clientList = NULL;				//available only for server
+	size_t      clientCount = 0;
+	clientNode* clientList = NULL;		//available only for server
 #endif
 
 //*****************************************************************************************************************
@@ -56,8 +57,8 @@ static const int g_bufferSize = 4096;
 //*****************************************************************************************************************
 //*****************************************************************************************************************
 SocketDriver getSocketDriver(void) {
-	SocketDriver rv = { 0 };	//if field later unspecified, default all zeroes
-	rv.fd = -1;					//specify each field with
+	SocketDriver rv = { 0 };			//if field later unspecified, default all zeroes
+	rv.fd = -1;							//specify each field with
 	rv.sockoptval = -1;
 	rv.socketData = NULL;
 	socketBind(&rv);
@@ -162,20 +163,35 @@ bool socketBind(SocketDriver* const s) {
 #ifndef IS_SERVER
 	bool clientConnect(SocketDriver* const s, int ipComponents[NUM_IP_COMPS]) {
 		ASSERT(s);														//verify inputs valid
+		ASSERT(NULL == s->serverData);
 		ASSERT(ipComponents);
 		bool rv = true;													//assume success
-		struct sockaddr_in* tmp_sock_in = (struct sockaddr_in*)s->socketData;
-		void* sin_addr = &(tmp_sock_in->sin_addr);						//take address of buffer for memcpy
+		struct sockaddr_in* tmp_sock_in = malloc(						//allocate server socket addr
+			sizeof(sockaddr_in)
+		);
+		memset(tmp_sock_in, 0, sizeof(sockaddr_in));					//wipe server socket addr
+		tmp_sock_in->sin_family = g_domain;
+		tmp_sock_in->sin_port = htons(SERVER_PORT_NO);
 		unsigned char ipCastdown[NUM_IP_COMPS] = {	 					//convenient casting array for copying ip address
 			ipComponents[0],
 			ipComponents[1],
 			ipComponents[2],
 			ipComponents[3]
 		};
+		void* sin_addr = &(tmp_sock_in->sin_addr);						//take address of buffer for memcpy
 		memcpy(sin_addr, ipCastdown, NUM_IP_COMPS);						//copy ip address into struct
-		if (0 != connect(s->fd, s->socketData, sizeof(struct sockaddr_in))) {	
+		int connectRet = connect(
+			s->fd,
+			tmp_sock_in,
+			sizeof(struct sockaddr_in)
+		);
+
+		if (0 != connectRet) {	
 			memset(sin_addr, 0, NUM_IP_COMPS);							//on failure to connect, wipe buffer
 			rv = false;													//flag ret val to failure
+			free(tmp_sock_in);											//release allocated block
+		} else {
+			s->serverData = tmp_sock_in;
 		}
 		return rv;
 	}
@@ -196,17 +212,55 @@ bool socketBind(SocketDriver* const s) {
 			return rv;
 	}
 
+	void* nonblockingWrite(void* argData) {
+		listenLoopRoutineArgs_t* const arg = argData;					//cast to struct type
+		write(arg->fd, arg->outData.data, arg->outData.dataLength);		//write data to socket
+		free(arg);														//allocated in writeToAllClients(...)
+		return NULL;
+	}
+
+	void writeToAllClients(listenLoopRoutineArgs_t* const outgoing) {
+		ASSERT(outgoing);												//check input valid
+
+		size_t indexCount = 0;											//counter to index threads
+		pthread_t servicingThread[clientCount];							//threads to serve data to clients
+		pthread_func_t writeRoutine = nonblockingWrite;					//routine to fork threads into
+
+		clientNode* outClient = clientList;
+		while (NULL != outClient) {										//for each client subscribed
+			listenLoopRoutineArgs_t* const clientArgData = malloc(		//to be cleaned up in nonblockingWrite(...)
+				sizeof(listenLoopRoutineArgs_t)
+			);
+			clientArgData->fd = outClient->socketFD;					//take FD of client node
+			clientArgData->outData = outgoing->outData;					//take outgoing data
+
+			pthread_create(												//fork new thread to serve client new data
+				&servicingThread[indexCount++],
+				NULL,
+				writeRoutine,
+				&clientArgData
+			);
+
+			outClient = outClient->next;								//iterate to next client
+		}
+
+		for (indexCount = 0; indexCount < clientCount; indexCount++) {	//join up thread for each client
+			pthread_join(&servicingThread[indexCount++], NULL);
+		}
+	}
+
 	void serverListenLoop(SocketDriver* const s, pthread_func_t serviceRoutine) {
 		ASSERT(s);														//check valid inputs
 		ASSERT(serviceRoutine);
-		while (true) {
+		while (true) {													//loop endlessly
 			int requestDescriptor = -1;									//file descriptor of next issued accept
-			socklen_t addrLen = sizeof(struct sockaddr_in);
-			do {
-				requestDescriptor = accept(								//attempt to accept next
+			socklen_t addrLen = sizeof(struct sockaddr_in);				//take length of addr struct
+			do {														//attempt accept until new connection
+				requestDescriptor = accept4(							//attempt to accept next
 					s->fd,
 					s->socketData,
-					&addrLen
+					&addrLen,
+					SOCK_NONBLOCK
 				);
 				if (requestDescriptor < 0) {							//broke accept for error 
 					const int error = errno;							//capture error number
@@ -216,8 +270,8 @@ bool socketBind(SocketDriver* const s) {
 						EINTR
 					};													//list of errors tolerated
 					
-					const int arrSize =
-						sizeof(acceptableErrors) / sizeof(int);
+					const int arrSize =	
+						sizeof(acceptableErrors) / sizeof(int);			//take number of tolerated errors
 					int counter = 0;
 					bool isAcceptableError = false;
 					for (; counter < arrSize; counter++) {				//if tolerated error then flag appropriately
@@ -235,7 +289,8 @@ bool socketBind(SocketDriver* const s) {
 					}
 				}
 			} while (requestDescriptor < 0);
-				serverServiceAccept(requestDescriptor, serviceRoutine);	//new valid accept received, service it
+
+			serverServiceAccept(requestDescriptor, serviceRoutine);		//new valid accept received, service it
 		}
 	}
 
@@ -251,12 +306,19 @@ bool socketBind(SocketDriver* const s) {
 		newNode->socketFD = fd;								//set file descriptor
 		newNode->next = clientList;
 		clientList = newNode;								//move new clientNode to head of clientList
+		clientCount++;
+
+		listenLoopRoutineArgs_t* argData = malloc(
+			sizeof(listenLoopRoutineArgs_t)
+		);													//allocate struct for argData, cleaned up in consumer thread
+		argData->fd = fd;
+
 
 		pthread_create(										//fork new thread to serve client
 			&newNode->servicingThread,
 			NULL,
 			serviceRoutine,
-			&newNode->socketFD								//file descriptor
+			argData											//file descriptor
 		);
 	}
 #endif
