@@ -260,7 +260,7 @@ bool socketBind(SocketDriver* const s) {
 		size_t indexCount = 0;											//counter to index threads
 		pthread_mutex_lock(&clientListLock);
 		LINE_LOG;
-		const int myClientCount = clientCount;
+		const size_t myClientCount = clientCount;
 		pthread_t servicingThread[clientCount];							//threads to serve data to clients
 		pthread_func_t writeRoutine = nonblockingWrite;					//routine to fork threads into
 		clientNode* outClient = clientList;

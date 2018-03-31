@@ -143,12 +143,15 @@ void* incomingThreadDriver(void* unused) {
 		);												//read in buffer
 		switch (recvCode) {
 			case -1:
+				LINE_LOG;
 				usleep(tryReceiving_ms * 1000);			//wait to read again on error
 			break;
 			case 0:
+				LINE_LOG;
 				goto serverShutdown;					//server has gracefully closed
 			break;
 			default:
+				LINE_LOG;
 				printf("%s", buffer);					//print buffer contents
 			break;
 		}
