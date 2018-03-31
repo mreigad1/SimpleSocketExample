@@ -10,10 +10,11 @@ This project demonstrates a simple *nix chat application driven via client-serve
 				of the 3 relevant system processes. By default this will generate a randomized user name and will launch a client chat instance as
 				as well as the server instance.
 
-				To deploy only server application or if gnome-terminal is unsupported, execute instead with:
+				To deploy only server application or ***if gnome-terminal is unsupported***, execute instead with:
 
-					(1) make server
-					(2) ./server
+					(1) ./setServerIP.sh [SERVER_IPv4]
+					(2) make server
+					(3) ./server
 
 			Client Steps:
 
@@ -25,7 +26,7 @@ This project demonstrates a simple *nix chat application driven via client-serve
 
 				(4) Execute "make clientDeployment" to deploy client applications with settings from configuration files
 
-				To deploy only client applications or if gnome-terminal is unsupported, executed instead with:
+				To deploy only client applications or ***if gnome-terminal is unsupported***, executed instead with:
 
 					(i)   Execute "make client" to build applications
 
