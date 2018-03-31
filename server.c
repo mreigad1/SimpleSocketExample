@@ -1,8 +1,11 @@
+#define _BSD_SOURCE
+
 #include <sys/socket.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <string.h>
 #include "SocketDriver.h"
 #include "debug.h"
 #include "universe.h"
@@ -23,12 +26,22 @@ void* onNewConnection(void* args) {
 	while (true) {																	//loop endlessly
 		memset(buffer, 0, sizeof(buffer));											//wipe buffer
 		while (read(dat->fd, dat->outData.data, sizeof(buffer) - 1) < 0) {			//read into buffer
+			LINE_LOG;
 			ASSERT(EAGAIN == errno);												//assert error was EAGAIN
+			LINE_LOG;
 			usleep(clientPollingRate_ms * 1000);									//sleep until next read attempt
+			LINE_LOG;
 		}
-		writeToAllClients(dat);														//read successful, write data
+		LINE_LOG;
+		if (EPIPE != errno) {
+			LINE_LOG;
+			writeToAllClients(dat);													//read successful, write data
+			LINE_LOG;
+		} else {
+			LINE_LOG;
+			break;																	//break when connection closed
+		}
 	}
-	free(args);																		//buffer handed to thread must be cleared here
 
 	return NULL;
 }

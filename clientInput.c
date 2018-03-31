@@ -6,7 +6,9 @@
 
 char globalBuf[BUF_SIZE + 1];
 
-void getMessage() {
+void getMessage(void);
+
+void getMessage(void) {
 	//wipe buffer
 	memset(globalBuf, 0, BUF_SIZE + 1);
 

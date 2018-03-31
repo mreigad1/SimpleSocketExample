@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <pthread.h>
 #include <netinet/in.h>
 #include <sys/types.h>
@@ -8,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/poll.h>
 #include "SocketDriver.h"
 #include "debug.h"
 #include "universe.h"
@@ -25,6 +28,11 @@
 		pthread_t    servicingThread;			//thread servicing this client
 		clientNode*  next;						//next client in list
 	};
+
+	typedef struct {
+		void* forwardedArgs;
+		pthread_func_t serviceRoutine;
+	} launcherArgs;
 #endif
 
 //*****************************************************************************************************************
@@ -34,7 +42,12 @@
 //*****************************************************************************************************************
 bool getSocket(int* const fd, int* const sockoptval);
 bool socketBind(SocketDriver* const s);
-void serverServiceAccept(const int fd, pthread_func_t serviceRoutine);
+
+#ifdef IS_SERVER
+	void serverServiceAccept(const int fd, pthread_func_t serviceRoutine);
+	void* nonblockingWrite(void* argData);
+	void* routineLauncher(void* args);
+#endif
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
@@ -49,6 +62,8 @@ static const int g_bufferSize = 4096;
 #ifdef IS_SERVER
 	size_t      clientCount = 0;
 	clientNode* clientList = NULL;		//available only for server
+	pthread_mutex_t clientListLock = PTHREAD_MUTEX_INITIALIZER;
+	clientNode* freeClient = NULL;
 #endif
 
 //*****************************************************************************************************************
@@ -70,6 +85,7 @@ void closeSocketDriver(SocketDriver* const s) {
 	ASSERT(s->fd >= 0);
 	close(s->fd);
 	if (s->socketData) {
+		LINE_LOG;
 		free(s->socketData);
 		s->socketData = NULL;
 	}
@@ -150,7 +166,10 @@ bool socketBind(SocketDriver* const s) {
 		
 		if (false == rv) {										//if error
 			if (socketResult >= 0) { close(socketResult); }		//if socket opened but binding failed then close socket
-			if (NULL != sockInfo)  { free(sockInfo); }			//clean up allocated struct on error
+			if (NULL != sockInfo)  { 
+				LINE_LOG;
+				free(sockInfo);
+			}													//clean up allocated struct on error
 		}
 		return rv;
 }
@@ -167,9 +186,9 @@ bool socketBind(SocketDriver* const s) {
 		ASSERT(ipComponents);
 		bool rv = true;													//assume success
 		struct sockaddr_in* tmp_sock_in = malloc(						//allocate server socket addr
-			sizeof(sockaddr_in)
+			sizeof(struct sockaddr_in)
 		);
-		memset(tmp_sock_in, 0, sizeof(sockaddr_in));					//wipe server socket addr
+		memset(tmp_sock_in, 0, sizeof(struct sockaddr_in));				//wipe server socket addr
 		tmp_sock_in->sin_family = g_domain;
 		tmp_sock_in->sin_port = htons(SERVER_PORT_NO);
 		unsigned char ipCastdown[NUM_IP_COMPS] = {	 					//convenient casting array for copying ip address
@@ -182,16 +201,32 @@ bool socketBind(SocketDriver* const s) {
 		memcpy(sin_addr, ipCastdown, NUM_IP_COMPS);						//copy ip address into struct
 		int connectRet = connect(
 			s->fd,
-			tmp_sock_in,
+			(struct sockaddr *)tmp_sock_in,
 			sizeof(struct sockaddr_in)
 		);
 
-		if (0 != connectRet) {	
+		ASSERT(0 == connectRet || EINPROGRESS == errno);
+
+		struct pollfd myfd = {
+			s->fd,
+			POLLIN | POLLOUT | POLLPRI,
+			0
+		};
+
+		connectRet = poll(
+			&myfd,														//fd struct to poll
+			1,															//send one fd
+			-1															//poll forever if necessary
+		);
+
+		ASSERT(1 == connectRet);
+		if (1 != connectRet) {	
 			memset(sin_addr, 0, NUM_IP_COMPS);							//on failure to connect, wipe buffer
 			rv = false;													//flag ret val to failure
+			LINE_LOG;
 			free(tmp_sock_in);											//release allocated block
 		} else {
-			s->serverData = tmp_sock_in;
+			s->serverData = (struct sockaddr *)tmp_sock_in;
 		}
 		return rv;
 	}
@@ -215,47 +250,55 @@ bool socketBind(SocketDriver* const s) {
 	void* nonblockingWrite(void* argData) {
 		listenLoopRoutineArgs_t* const arg = argData;					//cast to struct type
 		write(arg->fd, arg->outData.data, arg->outData.dataLength);		//write data to socket
+		LINE_LOG;
 		free(arg);														//allocated in writeToAllClients(...)
 		return NULL;
 	}
 
 	void writeToAllClients(listenLoopRoutineArgs_t* const outgoing) {
 		ASSERT(outgoing);												//check input valid
-
 		size_t indexCount = 0;											//counter to index threads
+		pthread_mutex_lock(&clientListLock);
+		LINE_LOG;
+		const int myClientCount = clientCount;
 		pthread_t servicingThread[clientCount];							//threads to serve data to clients
 		pthread_func_t writeRoutine = nonblockingWrite;					//routine to fork threads into
-
 		clientNode* outClient = clientList;
 		while (NULL != outClient) {										//for each client subscribed
+			LINE_LOG;
 			listenLoopRoutineArgs_t* const clientArgData = malloc(		//to be cleaned up in nonblockingWrite(...)
 				sizeof(listenLoopRoutineArgs_t)
 			);
 			clientArgData->fd = outClient->socketFD;					//take FD of client node
 			clientArgData->outData = outgoing->outData;					//take outgoing data
-
+			LINE_LOG;
 			pthread_create(												//fork new thread to serve client new data
 				&servicingThread[indexCount++],
 				NULL,
 				writeRoutine,
-				&clientArgData
+				(void*)clientArgData
 			);
-
+			LINE_LOG;
 			outClient = outClient->next;								//iterate to next client
 		}
-
-		for (indexCount = 0; indexCount < clientCount; indexCount++) {	//join up thread for each client
-			pthread_join(&servicingThread[indexCount++], NULL);
+		pthread_mutex_unlock(&clientListLock);
+		LINE_LOG;
+		for (indexCount = 0; indexCount < myClientCount; indexCount++) {//join up thread for each client
+			pthread_join(servicingThread[indexCount], NULL);
 		}
+		LINE_LOG;
 	}
 
 	void serverListenLoop(SocketDriver* const s, pthread_func_t serviceRoutine) {
 		ASSERT(s);														//check valid inputs
 		ASSERT(serviceRoutine);
+		LINE_LOG;
+		const int pumpTheBreaks_ms = 40;
 		while (true) {													//loop endlessly
 			int requestDescriptor = -1;									//file descriptor of next issued accept
 			socklen_t addrLen = sizeof(struct sockaddr_in);				//take length of addr struct
 			do {														//attempt accept until new connection
+				LINE_LOG;
 				requestDescriptor = accept4(							//attempt to accept next
 					s->fd,
 					s->socketData,
@@ -267,9 +310,10 @@ bool socketBind(SocketDriver* const s) {
 					static const int acceptableErrors[] = {
 						ECHILD,
 						ERESTART,
-						EINTR
+						EINTR,
+						EAGAIN
 					};													//list of errors tolerated
-					
+					LINE_LOG;
 					const int arrSize =	
 						sizeof(acceptableErrors) / sizeof(int);			//take number of tolerated errors
 					int counter = 0;
@@ -279,19 +323,72 @@ bool socketBind(SocketDriver* const s) {
 							isAcceptableError = true;
 						}
 					}
+					LINE_LOG;
 					if (false == isAcceptableError) {					//if not tolerated error then display error and die
 						fprintf(
 							stderr,
-							"accept failed for error number: %d",
+							"accept failed for error number: %d\n",
 							error
 						);
 						exit(1);
 					}
+					LINE_LOG;
 				}
+				usleep(pumpTheBreaks_ms * 1000);
 			} while (requestDescriptor < 0);
-
+			LINE_LOG;
 			serverServiceAccept(requestDescriptor, serviceRoutine);		//new valid accept received, service it
+			usleep(pumpTheBreaks_ms * 1000);
 		}
+	}
+
+	void* routineLauncher(void* args) {
+		ASSERT(args);
+		launcherArgs* largs = args;
+		pthread_func_t serviceRoutine = largs->serviceRoutine;
+		listenLoopRoutineArgs_t* fargs = largs->forwardedArgs;
+		free(args);														//allocated in serviceAcceptRoutine
+
+		serviceRoutine(fargs);											//forward arguments to user routine
+
+		pthread_mutex_lock(&clientListLock);							//on return from user routine
+		if (freeClient) {												//cleanup old client no longer running
+			pthread_join(freeClient->servicingThread, NULL);			//must have added itself, should be ready to join
+			free(freeClient);											//free its memory block
+			freeClient = NULL;
+		}
+
+		if (NULL != clientList) {
+			if (clientList->socketFD == fargs->fd) {					//if fd to remove is at head of list
+				LINE_LOG;
+				freeClient = clientList;								//move bad node to freeClient
+				clientList = clientList->next;							//advance head node of clientList
+				LINE_LOG;
+			} else {
+				LINE_LOG;
+				clientNode* tmp = clientList;							//otherwise iterate clientList for file descriptor
+				while (NULL != tmp->next &&
+					fargs->fd != tmp->next->socketFD) {					//or until end of list
+						LINE_LOG;
+						tmp = tmp->next;
+				}
+				LINE_LOG;
+				if (NULL != tmp->next &&
+					fargs->fd == tmp->next->socketFD) {					//if file descriptor found, then
+						LINE_LOG;
+						close(fargs->fd);								//close descriptor
+						freeClient = tmp->next;							//move node to freeClient
+						tmp->next = freeClient->next;					//move parent to point at granchild node
+						freeClient->next = NULL;						//wipe list remainder from removed node
+						clientCount--;									//decrement client count
+						LINE_LOG;
+				}
+			}
+		}
+		pthread_mutex_unlock(&clientListLock);
+		free(fargs);													//buffer handed to thread must be cleared
+		LINE_LOG;
+		return NULL;
 	}
 
 	// @Procedure - receives file descriptor returned from accept()
@@ -304,21 +401,30 @@ bool socketBind(SocketDriver* const s) {
 		ASSERT(serviceRoutine);
 		clientNode* newNode = malloc(sizeof(clientNode));	//allocate new clientNode
 		newNode->socketFD = fd;								//set file descriptor
+		LINE_LOG;
+		pthread_mutex_lock(&clientListLock);
 		newNode->next = clientList;
 		clientList = newNode;								//move new clientNode to head of clientList
 		clientCount++;
-
-		listenLoopRoutineArgs_t* argData = malloc(
+		pthread_mutex_unlock(&clientListLock);
+		LINE_LOG;
+		listenLoopRoutineArgs_t* argData = malloc(			//to be deallocated int routineLauncher(...)
 			sizeof(listenLoopRoutineArgs_t)
 		);													//allocate struct for argData, cleaned up in consumer thread
 		argData->fd = fd;
-
-
+		LINE_LOG;
+		launcherArgs* launcherContainer = malloc(			//to be deallocated in routineLauncher(...)
+			sizeof(launcherArgs)
+		);
+		launcherContainer->serviceRoutine = serviceRoutine;
+		launcherContainer->forwardedArgs = argData;
+		LINE_LOG;
 		pthread_create(										//fork new thread to serve client
 			&newNode->servicingThread,
 			NULL,
-			serviceRoutine,
-			argData											//file descriptor
+			routineLauncher,								//launches callback and manages cleanup from client pool
+			launcherContainer								//container storing callback and arguments
 		);
+		LINE_LOG;
 	}
 #endif

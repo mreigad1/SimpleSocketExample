@@ -5,6 +5,8 @@
 #include <string.h>
 #include <stdbool.h>
 #include <sys/inotify.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include <pthread.h>
 #include "SocketDriver.h"
@@ -46,10 +48,10 @@ inotifyWatcher getWatcher(char* fileName);
 //*****************************************************************************************************************
 //*****************************************************************************************************************
 char* outgoingFile = NULL;
-char* incomingFile = NULL; 
 char* serverIPAddress = NULL;
 int ipComponents[NUM_IP_COMPS] = { -1, -1, -1, -1 };
 SocketDriver mySocket = { 0 };
+bool serverExited = false;
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
@@ -92,8 +94,8 @@ void handleEvent(watcherEvent* event) {
 		);
 		trySending = false;
 		if (-1 == sentCode) {						//on failure
-			trySending ||= (EAGAIN == errno);		//check if keep attempting
-			trySending ||= (EWOULDBLOCK == errno);
+			trySending |= (EAGAIN == errno);		//check if keep attempting
+			trySending |= (EWOULDBLOCK == errno);
 		}
 		if (trySending) {							//wait before reattempting
 			usleep(trySending_ms * 1000);
@@ -110,13 +112,18 @@ void* outgoingThreadDriver(void* unused) {
 		char buffer[INOT_BUF_SIZE] = { 0 };						//stack buffer for input
 		watcherEvent* event = (watcherEvent*)buffer;			//ptr for convenience
 		int bytesRead = read(watcher.fd, event, INOT_BUF_SIZE);	//blocking read until event 
+		if (serverExited) {
+			goto serverShutdown;								//read doesn't matter, server exited
+		}
 		if (0 <= bytesRead) {									//if successful read
 			handleEvent(event);									//then handle event
 		} else {
 			printf("Error at line %d, bytesRead = %d, sizeof(watcherEvent) = %d\n", __LINE__, bytesRead, (int)sizeof(watcherEvent));
 		}
 	}
-	return NULL;
+
+	serverShutdown:
+		return NULL;
 }
 
 //driver function for thread
@@ -134,27 +141,35 @@ void* incomingThreadDriver(void* unused) {
 			sizeof(buffer) - 1,
 			MSG_DONTWAIT
 		);												//read in buffer
-
-		printf("%s\n", buffer);							//print buffer contents
+		switch (recvCode) {
+			case -1:
+				usleep(tryReceiving_ms * 1000);			//wait to read again on error
+			break;
+			case 0:
+				goto serverShutdown;					//server has gracefully closed
+			break;
+			default:
+				printf("%s", buffer);					//print buffer contents
+			break;
+		}
 	}
 
-	return NULL;
+	serverShutdown:
+		serverExited = true;
+		return NULL;
 }
 
 //driven by main to parse input args
 //argv[0] prog name
 //argv[1] outgoingFile name
-//argv[2] incomingFile name
-//argv[3] server IP address
+//argv[2] server IP address
 void parseCmdArgs(int argc, char** argv) {
 	outgoingFile = argv[1];
-	incomingFile = argv[2];
-	serverIPAddress = argv[3];
+	serverIPAddress = argv[2];
 
-	ASSERT(4 == argc);
+	ASSERT(3 == argc);
 	ASSERT(NULL != argv[1]);
 	ASSERT(NULL != argv[2]);
-	ASSERT(NULL != argv[3]);
 
 	int ipCompCounter = 0;
 	char* subComp = strtok(serverIPAddress, ".");
@@ -170,17 +185,17 @@ void parseCmdArgs(int argc, char** argv) {
 }
 
 void deployThreads(void) {
-	//pthread_t outgoingThread;
+	pthread_t outgoingThread;
 	pthread_t incomingThread;
 
 	pthread_func_t outgoingDriver = outgoingThreadDriver;			//thread driver sends messages to server
 	pthread_func_t incomingDriver = incomingThreadDriver;			//thread driver reads messages from server
 
+	pthread_create(&outgoingThread, NULL, outgoingDriver, NULL);	//launch thread for outgoing messages
 	pthread_create(&incomingThread, NULL, incomingDriver, NULL);	//launch thread for incoming messages
-	pthread_create(&incomingThread, NULL, outgoingDriver, NULL);	//launch thread for outgoing messages
 
-	pthread_join(&incomingThread, NULL);							//wait for incoming thread to terminate
-	pthread_join(&outgoingThread, NULL);							//wait for incoming thread to terminate
+	pthread_join(outgoingThread, NULL);								//wait for incoming thread to terminate
+	pthread_join(incomingThread, NULL);								//wait for incoming thread to terminate
 }
 
 int main(int argc, char** argv) {
