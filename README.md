@@ -36,6 +36,18 @@ This project demonstrates a simple *nix chat application driven via client-serve
 					      shared with clientSocket via inotify and USER_NAME is the desired user name of this client instance
 					      (Undefined behavior for user name with spaces)
 
+					      NOTE: By default, the clientInput will prepend the user name of the system user to the
+					            contents of the exported file used by inotify. HOWEVER, the clientSocket application
+					            is completely agnostic of user name, and completely agnostic of existence of
+					            clientInput's existence. The file specified to clientSocket need only be changed for
+					            inotify to automatically buffer the new file contents and export them. This makes
+					            execution of clientInput completely optional, as you can just echo into BUFFER_FILE
+					            and changes will be sent. It is worth note, only (BUF_SIZE-1) characters at maximum
+					            will be read to/from inotify and/or the socket connection. This value exists defined
+					            in universe.h and may be reconfigured, but will rapidly exceed pthreads thread
+					            stack-space if too large, as all read+write buffers in program space are kept on thread
+					            stacks.
+
 			Known Issues:
 
 				(1) Broken pipe in server on first terminated client application causes server application to
@@ -78,6 +90,18 @@ This project demonstrates a simple *nix chat application driven via client-serve
 									 This file will be watched for changes by the clientSocket application (which will write changes).
 
 						USER_NAME: A user name which will be displayed for user's messages on server
+
+					NOTE: By default, the clientInput will prepend the user name of the system user to the
+					      contents of the exported file used by inotify. HOWEVER, the clientSocket application
+					      is completely agnostic of user name, and completely agnostic of existence of
+					      clientInput's existence. The file specified to clientSocket need only be changed for
+					      inotify to automatically buffer the new file contents and export them. This makes
+					      execution of clientInput completely optional, as you can just echo into BUFFER_FILE
+					      and changes will be sent. It is worth note, only (BUF_SIZE-1) characters at maximum
+					      will be read to/from inotify and/or the socket connection. This value exists defined
+					      in universe.h and may be reconfigured, but will rapidly exceed pthreads thread
+					      stack-space if too large, as all read+write buffers in program space are kept on thread
+					      stacks.
 
 			clientSocket:
 				This application when launched will watch the file written to by the clientInput process [with inotify] and will
