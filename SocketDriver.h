@@ -1,17 +1,15 @@
 #include <stdbool.h>
 #include "universe.h"
-
-//declare opaque struct type for sock data ptr
-struct sockaddr;
+#include "messageTypes.h"
 
 //struct to contain results of
 //socket binding functions
 typedef struct {
 	int fd;
 	int sockoptval;
-	struct sockaddr* socketData;
-	#ifndef IS_SERVER
-		struct sockaddr* serverData;
+	struct sockaddr_in theirSockInfo;
+	#ifdef IS_SERVER
+		struct sockaddr_in mySockInfo;
 	#endif
 } SocketDriver;
 
@@ -25,14 +23,7 @@ SocketDriver getSocketDriver(void);
 //             data for socket to be closed
 void closeSocketDriver(SocketDriver* const s);
 
-#ifndef IS_SERVER
-	// @Procedure - issues connection from client to server
-	// @return - true on success, false on failure
-	bool clientConnect(SocketDriver* const s, int ipComponents[NUM_IP_COMPS]);
-#endif
-
 #ifdef IS_SERVER
-
 	//struct representing data to be written to all client sockets
 	typedef struct {
 		void* data;
@@ -44,17 +35,11 @@ void closeSocketDriver(SocketDriver* const s);
 	typedef struct {
 		int fd;
 		writeData_t outData;
+		serverState_t currentState;
+		unsigned long bytesReceived;
+		unsigned long downloadSize;
+		unsigned long nextID;
 	} listenLoopRoutineArgs_t;
-
-	// @Procedure - sets socket to listen for
-	//              incoming connections
-	// @return - true on success, false on failure
-	void writeToAllClients(listenLoopRoutineArgs_t* const outgoing);
-
-	// @Procedure - sets socket to listen for
-	//              incoming connections
-	// @return - true on success, false on failure
-	bool serverSetListen(SocketDriver* const s);
 
 	// @Procedure - enters server into listening state
 	//              so that server may begin accepting
