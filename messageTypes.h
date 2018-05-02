@@ -1,17 +1,20 @@
 #include "universe.h"
 
 typedef enum {
-	UPLOAD_REQUEST = 100,
-	ACKNOWLEDGE    = 101,
-	DATA_SEGMENT   = 102,
-	END_UPLOAD     = 103,
-	MESSAGE_FAILED = 104
+	LOWER_MSG_INVALID  =  99,
+	UPLOAD_REQUEST     = 100,
+	ACKNOWLEDGE        = 101,
+	DATA_SEGMENT       = 102,
+	END_UPLOAD         = 103,
+	MESSAGE_FAILED     = 104,
+	UPPER_MSG_INVALID  = 105
 } messageType_t;
 
 typedef enum {
-	WAITING      = 200,
-	DOWNLOADING  = 201,
-	FINISHED     = 202
+	WAITING           = 200,
+	DOWNLOADING       = 201,
+	FINISHED          = 202,
+	DOWNLOAD_COMPLETE = 203
 } serverState_t;
 
 typedef struct {
@@ -41,7 +44,6 @@ typedef struct {
 //Server receives
 typedef struct {
 	baseMessage_t header;
-	size_t segmentIndex;
 	size_t segmentLength;
 	char bufferHandle[0];
 } dataSegment_t;

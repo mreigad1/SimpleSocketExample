@@ -45,10 +45,15 @@ void closeSocketDriver(SocketDriver* const s);
 	//              so that server may begin accepting
 	//              and servicing connections
 	// @param[s] - socket driver struct to drive the listen loop
-	// @param[serviceRoutine] - pthread_func_t type procedure to forward new accepted connections to.
-	//                          listenLoopRoutineArgs_t to be passed to serviceRoutine containing fd
-	//                          of the client writing to server, rest of struct to be populated by
-	//                          serviceRoutine before forwarding to writeToAllClients
 	// @return - TBD
-	void serverListenLoop(SocketDriver* const s, pthread_func_t serviceRoutine);
+	void serverListenLoop(SocketDriver* const s);
+#else
+
+	// @Procedure - enters server into listening state
+	//              so that server may begin accepting
+	//              and servicing connections
+	// @param[s] - socket driver struct to drive the listen loop
+	// @return - TBD
+	void clientSendLoop(SocketDriver* const s);
+
 #endif
