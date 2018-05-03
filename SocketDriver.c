@@ -125,7 +125,7 @@
 			ASSERT(outgoingHandle);
 			LINE_LOG;
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
-			while (BUF_SIZE ==  var) {
+			while (BUF_SIZE !=  var) {
 				var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 			}
 			LINE_LOG;
