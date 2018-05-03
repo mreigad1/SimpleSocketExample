@@ -34,7 +34,8 @@
 		//Client sends
 		//Server receives
 		typedef struct {
-			baseMessage_t header;
+			messageType_t messageType;
+			size_t messageID;
 			size_t fileSize;
 		} uploadRequest_t;
 
@@ -42,7 +43,8 @@
 		//Server+Client sends
 		//Server+Client receives
 		typedef struct {
-			baseMessage_t header;
+			messageType_t messageType;
+			size_t messageID;
 			unsigned acknowledgedMessageID;
 			unsigned nextID;
 		} acknowledge_t;
@@ -51,7 +53,8 @@
 		//Client sends
 		//Server receives
 		typedef struct {
-			baseMessage_t header;
+			messageType_t messageType;
+			size_t messageID;
 			char bufferHandle[0];
 		} dataSegment_t;
 
@@ -59,7 +62,8 @@
 		//Client sends
 		//Server receives
 		typedef struct {
-			baseMessage_t header;
+			messageType_t messageType;
+			size_t messageID;
 			char checkSum;
 			char fileName[0];
 		} endUpload_t;
@@ -68,11 +72,12 @@
 		//Server+Client sends
 		//Server+Client receives
 		typedef struct {
-			baseMessage_t header;
+			messageType_t messageType;
+			size_t messageID;
 			unsigned failedMessageID;
 		} messageFailed_t;
 
-		typedef union CommunicationBuffer_t {
+		typedef union {
 			uploadRequest_t asUploadRequest;
 			acknowledge_t 	asAcknowledge;
 			dataSegment_t 	asDataSegment;

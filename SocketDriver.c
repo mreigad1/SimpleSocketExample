@@ -36,6 +36,7 @@
 		rv.fd = -1;							//specify each field with
 		rv.sockoptval = -1;
 		acquireSocket(&rv);					//implementation varies as client/server
+		ASSERT(rv.fd >= 0);
 		return rv;
 	}
 
@@ -58,54 +59,39 @@
 			g_type,
 			g_protocol
 		);
-		ERROR_IF (fdesc < 0);				//error when opening socket fails
+		ASSERT(fdesc >= 0);					//error when opening socket fails
 		*fd = fdesc;						//set and return fd if socket properly acquired
-		doReturn:
+		//doReturn:
 			return rv;
 	}
 
-	#ifdef IS_SERVER
-		// @Procedure - opens and binds socket, provides file
-		//              descriptor and bind result
-		// @return - true if success, false if failed
-		// @param[s] - socket data structure to bind results to
-		bool acquireSocket(SocketDriver* const s) {
-			ASSERT(s);													//check for valid param
-			bool rv = true;												//default true, false by ERROR_IF
-			int fd = -1;
-			ASSERT(getSocket(&fd));
+	// @Procedure - opens and binds socket, provides file
+	//              descriptor and bind result
+	// @return - true if success, false if failed
+	// @param[s] - socket data structure to bind results to
+	bool acquireSocket(SocketDriver* const s) {
+		ASSERT(s);													//check for valid param
+		bool rv = true;												//default true, false by ERROR_IF
+		int fd = -1;
+		ASSERT(getSocket(&fd));
 
+		s->fd = fd;
+
+		#ifdef IS_SERVER
 			memset((char*)&s->mySockInfo, 0, sizeof(struct sockaddr_in));
-
 			s->mySockInfo.sin_family = g_domain;
 			s->mySockInfo.sin_port = htons(SERVER_PORT_NO);
 			s->mySockInfo.sin_addr.s_addr = htonl(INADDR_ANY);
-
-			ASSERT(bind(fd, (struct sockaddr*)&s->mySockInfo, sizeof(struct sockaddr_in)) != -1);
-
-			return rv;
-		}
-	#else
-		// @Procedure - opens and binds socket, provides file
-		//              descriptor and bind result
-		// @return - true if success, false if failed
-		// @param[s] - socket data structure to bind results to
-		bool acquireSocket(SocketDriver* const s) {
-			ASSERT(s);													//check for valid param
-			bool rv = true;												//default true, false by ERROR_IF
-			int fd = -1;
-			ASSERT(getSocket(&fd));
-
+			ASSERT(bind(fd, (struct sockaddr*)&s->mySockInfo, sizeof(struct sockaddr_in)) == 0);
+		#else
 			memset((char*)&s->theirSockInfo, 0, sizeof(struct sockaddr_in));
-
 			s->theirSockInfo.sin_family = g_domain;
 			s->theirSockInfo.sin_port = htons(SERVER_PORT_NO);
-
 			ASSERT(inet_aton(SERVER_IP, &s->theirSockInfo.sin_addr) != 0);
+		#endif
 
-			return rv;
-		}
-	#endif
+		return rv;
+	}
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
@@ -114,7 +100,8 @@
 //*****************************************************************************************************************
 	void driverLoop(SocketDriver* const s) {
 		ASSERT(s);
-		ASSERT(sizeof(CommunicationBuffer_t) == BUF_SIZE);
+
+		ASSERT(sizeof(CommunicationBuffer_t) >= BUF_SIZE);
 
 		unsigned int slen = sizeof(struct sockaddr_in);
 
@@ -124,22 +111,35 @@
 		//if client
 		#ifndef IS_SERVER
 			ASSERT(downloadRequest("foo.txt", &outgoingHandle));	//get kickoff message
+			LINE_LOG;
 			ASSERT(outgoingHandle);
-			ASSERT(BUF_SIZE == sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen));		//send kickoff message
+			LINE_LOG;
+			ssize_t foo = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
+			LINE_LOG;
+			ASSERT(BUF_SIZE == foo);		//send kickoff message
+			LINE_LOG;
 		#endif
 
-		while (DOWNLOAD_COMPLETE != dat.currentState) {		
-			ASSERT(BUF_SIZE == recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen));	//receive message
+		while (DOWNLOAD_COMPLETE != dat.currentState) {
+			LINE_LOG;
+			ssize_t var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
+			LINE_LOG;
+			LINE_LOG;
+			ASSERT(BUF_SIZE == var);	//receive message
+			LINE_LOG;
 			ASSERT(handleMessage(&dat, &outgoingHandle));																			//handle message, by pack outgoing message
+			LINE_LOG;
 			ASSERT(outgoingHandle);																									//ensure handle to outgoing message
-
+			LINE_LOG;
 			ASSERT(BUF_SIZE == sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen));		//send outgoing message
+			LINE_LOG;
 			outgoingHandle = NULL;																									//nullify outgoing message
+			LINE_LOG;
 		}
 
 		#ifndef IS_SERVER
-			ASSERT("Client Download Completed" == NULL);
+			printf("Client Download Completed\n");
 		#else
-			ASSERT("Server Download Complete" == NULL);
+			printf("Server Download Completed\n");
 		#endif
 	}

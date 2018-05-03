@@ -6,9 +6,9 @@
 	//compile time constants used in project
 	#define NUM_IP_COMPS		4
 	#define BUF_SIZE			1500
-	#define SERVER_PORT_NO		1234
+	#define SERVER_PORT_NO		1236
 	#define PATH_MAX            (1 << 10)
-	#define SERVER_IP			"127.0.0.1"
+	#define SERVER_IP			"192.168.180.120"
 
 	#include <netinet/in.h>
 	#include <sys/types.h>
