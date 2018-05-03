@@ -116,13 +116,18 @@
 		listenLoopRoutineArgs_t dat = { 0, 0, 0, WAITING, &incomingBuffer };
 		CommunicationBuffer_t* outgoingHandle = NULL;
 
+		ssize_t var = 0;
+		
 		//if client
 		#ifndef IS_SERVER
 			ASSERT(downloadRequest("foo.txt", &outgoingHandle));	//get kickoff message
 			LINE_LOG;
 			ASSERT(outgoingHandle);
 			LINE_LOG;
-			ssize_t foo = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
+			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
+			while (BUF_SIZE ==  var) {
+
+			}
 			LINE_LOG;
 			ASSERT(BUF_SIZE == foo);		//send kickoff message
 			LINE_LOG;
@@ -130,7 +135,6 @@
 
 		while (DOWNLOAD_COMPLETE != dat.currentState) {
 			LINE_LOG;
-			ssize_t var = 0;
 			var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
 			if (BUF_SIZE ==  var) {
 				LINE_LOG;
