@@ -60,15 +60,15 @@
 			g_protocol
 		);
 
+		ASSERT(fdesc >= 0);					//error when opening socket fails
+		*fd = fdesc;						//set and return fd if socket properly acquired
+
 		struct timeval tv;
 		tv.tv_sec = 0;
 		tv.tv_usec = 100 * 1000;
-		if (setsockopt(rcv_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+		if (setsockopt(fdesc, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
 			perror("Socket set timeout failed");
 		}
-
-		ASSERT(fdesc >= 0);					//error when opening socket fails
-		*fd = fdesc;						//set and return fd if socket properly acquired
 
 		return rv;
 	}
@@ -130,17 +130,16 @@
 
 		while (DOWNLOAD_COMPLETE != dat.currentState) {
 			LINE_LOG;
-			ssize_t var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
-			LINE_LOG;
-			ASSERT(BUF_SIZE == var);	//receive message
-			LINE_LOG;
-			ASSERT(handleMessage(&dat, &outgoingHandle));																			//handle message, by pack outgoing message
-			LINE_LOG;
-			ASSERT(outgoingHandle);																									//ensure handle to outgoing message
-			LINE_LOG;
-			ASSERT(BUF_SIZE == sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen));		//send outgoing message
-			LINE_LOG;
-			outgoingHandle = NULL;																									//nullify outgoing message
+			ssize_t var = 0;
+			var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
+			if (BUF_SIZE ==  var) {
+				LINE_LOG;
+				ASSERT(handleMessage(&dat, &outgoingHandle));																			//handle message, by pack outgoing message
+				LINE_LOG;
+				ASSERT(outgoingHandle);																									//ensure handle to outgoing message
+				LINE_LOG;
+			}
+			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 			LINE_LOG;
 		}
 
