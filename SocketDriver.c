@@ -117,7 +117,7 @@
 		CommunicationBuffer_t* outgoingHandle = NULL;
 
 		ssize_t var = 0;
-		
+
 		//if client
 		#ifndef IS_SERVER
 			ASSERT(downloadRequest("foo.txt", &outgoingHandle));	//get kickoff message
@@ -126,10 +126,8 @@
 			LINE_LOG;
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 			while (BUF_SIZE ==  var) {
-
+				var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 			}
-			LINE_LOG;
-			ASSERT(BUF_SIZE == foo);		//send kickoff message
 			LINE_LOG;
 		#endif
 
