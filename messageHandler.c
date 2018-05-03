@@ -1,14 +1,28 @@
 #include "messageHandler.h"
-#include "messageTypes.h"
-#include "debug.h"
-#include "universe.h"
-
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
 //***************************************    Function Prototypes    ***********************************************
 //*****************************************************************************************************************
 //*****************************************************************************************************************
+	bool downloadWrite(const dataSegment_t* const msg);
+	void clearCommBuff(CommunicationBuffer_t* buf);
+	void initializeOutgoing(messageType_t msgType);
+	void initializeAcknowledge(listenLoopRoutineArgs_t* const dat) ;
+
+	bool validWaitingCondition(listenLoopRoutineArgs_t* const dat);
+	bool validDownloadingCondition(listenLoopRoutineArgs_t* const dat);
+	bool validFinishedCondition(listenLoopRoutineArgs_t* const dat);
+
+	void processWaiting(listenLoopRoutineArgs_t* const dat);
+	void processDownloading(listenLoopRoutineArgs_t* const dat);
+	void processFinished(listenLoopRoutineArgs_t* const dat);
+
+	void processMessage(listenLoopRoutineArgs_t* const dat);
+	bool messageSensible(listenLoopRoutineArgs_t* const dat);
+	void issueFailed(listenLoopRoutineArgs_t* const dat);
+
+	bool handleMessage(listenLoopRoutineArgs_t* const incomingMessage, CommunicationBuffer_t** outgoingHandle);
 
 
 //*****************************************************************************************************************
@@ -30,10 +44,10 @@
 	bool downloadWrite(const dataSegment_t* const msg) {
 		ASSERT(msg);																			//ensure input valid
 		ASSERT(serverWrittenFile);																//ensure file handle is good
-		ASSERT(msg->segmentLength <= (BUF_SIZE - sizeof(dataSegment_t)));						//ensure proper packet size has been sent
-		fwrite(msg->bufferHandle, msg->segmentLength, 1, serverWrittenFile);					//write buffer contents to file
+		const size_t numWritten = sizeof(CommunicationBuffer_t) - sizeof(dataSegment_t);		//take size of buffer
+		fwrite(msg->bufferHandle, numWritten, 1, serverWrittenFile);							//write buffer contents to file
 		size_t checkSumIterator = 0;
-		for (checkSumIterator = 0; checkSumIterator < msg->segmentLength; checkSumIterator++) {	//continue calculating file checksum
+		for (checkSumIterator = 0; checkSumIterator < numWritten; checkSumIterator++) {			//continue calculating file checksum
 			serverFileCheckSum = serverFileCheckSum ^ msg->bufferHandle[checkSumIterator];
 		}
 		return true;
@@ -66,21 +80,21 @@
 //*****************************************************************************************************************
 	bool validWaitingCondition(listenLoopRoutineArgs_t* const dat) {
 		const serverState_t        currentServerState = dat->currentState;
-		const baseMessage_t* const msg = dat->outData.data;
+		const baseMessage_t* const msg = (const baseMessage_t*)dat->data;
 		const messageType_t        msgType = msg->messageType;
 		return (WAITING == currentServerState) && (UPLOAD_REQUEST == msgType) && (dat->nextID == msg->messageID);
 	}
 
 	bool validDownloadingCondition(listenLoopRoutineArgs_t* const dat) {
 		const serverState_t        currentServerState = dat->currentState;
-		const baseMessage_t* const msg = dat->outData.data;
+		const baseMessage_t* const msg = (const baseMessage_t*)dat->data;
 		const messageType_t        msgType = msg->messageType;
 		return (DOWNLOADING == currentServerState) && (DATA_SEGMENT == msgType) && (dat->nextID == msg->messageID);
 	}
 
 	bool validFinishedCondition(listenLoopRoutineArgs_t* const dat) {
 		const serverState_t        currentServerState = dat->currentState;
-		const baseMessage_t* const msg = dat->outData.data;
+		const baseMessage_t* const msg = (const baseMessage_t*)dat->data;
 		const messageType_t        msgType = msg->messageType;
 		return (FINISHED == currentServerState) && (END_UPLOAD == msgType) && (dat->nextID == msg->messageID);
 	}
@@ -92,49 +106,44 @@
 //**************************************    State Processor Procedures    *****************************************
 //*****************************************************************************************************************
 //*****************************************************************************************************************
-	bool processWaiting(listenLoopRoutineArgs_t* const dat) {
-		ASSERT(validWaitingCondition(dat));							//ensure proper state
-		const uploadRequest_t* const msg = dat->outData.data;		//take message as uploadRequest
-		const size_t                 msgSize = msg->fileSize;		//take size of download
-		bool rv = false;
-		initializeAcknowledge(dat)									//default response
-		dat->bytesReceived = 0;										//zero downloaded byte counter
-		dat->downloadSize = msgSize;								//initialize filesize
-		ASSERT(NULL == serverWrittenFile);							//ensure file NULL
-		serverWrittenFile = fopen(tempFileName, "w");				//open file
-		ASSERT(serverWrittenFile);									//ensure file opened
-		dat->currentState = DOWNLOADING;							//set downloading state
-		rv = true;													//return true
-		doReturn:
-			return rv;
+	void processWaiting(listenLoopRoutineArgs_t* const dat) {
+		ASSERT(validWaitingCondition(dat));								//ensure proper state
+		const uploadRequest_t* const msg = (uploadRequest_t*)dat->data;	//take message as uploadRequest
+		const size_t                 msgSize = msg->fileSize;			//take size of download
+
+		initializeAcknowledge(dat);										//default response
+		dat->bytesReceived = 0;											//zero downloaded byte counter
+		dat->downloadSize = msgSize;									//initialize filesize
+		ASSERT(NULL == serverWrittenFile);								//ensure file NULL
+		serverWrittenFile = fopen(tempFileName, "w");					//open file
+		ASSERT(serverWrittenFile);										//ensure file opened
+		dat->currentState = DOWNLOADING;								//set downloading state
+
 	}
 
-	bool processDownloading(listenLoopRoutineArgs_t* const dat) {
+	void processDownloading(listenLoopRoutineArgs_t* const dat) {
 		ASSERT(validDownloadingCondition(dat));							//ensure proper state
-		const dataSegment_t* const msg = dat->outData.data;				//take message as dataSegment message
-		bool rv = false;
+		const dataSegment_t* const msg = (dataSegment_t*)dat->data;		//take message as dataSegment message
+
 		ASSERT(downloadWrite(msg));										//write the contents to the file
 		initializeAcknowledge(dat);										//pack the response
-		dat->bytesReceived = dat->bytesReceived + msg->segmentLength;	//increment byte counter
+
+		const size_t numWritten =
+			sizeof(CommunicationBuffer_t) - sizeof(dataSegment_t);		//take size of buffer
+		dat->bytesReceived = dat->bytesReceived + numWritten;			//increment byte counter
 
 		if (dat->bytesReceived > dat->downloadSize) {					//check byte counter state
 			//TODO: Error condition here
 		} else if (dat->bytesReceived == dat->downloadSize) {
 			dat->currentState = FINISHED;
-			rv = true;
-		} else {
-			rv = true;
 		}
-
-		doReturn:
-			return rv;
 	}
 
-	bool processFinished(listenLoopRoutineArgs_t* const dat) {
+	void processFinished(listenLoopRoutineArgs_t* const dat) {
 		ASSERT(validFinishedCondition(dat));							//ensure proper state
-		endUpload_t* const msg = dat->outData.data;						//take message as endUpload
+		endUpload_t* const msg = (endUpload_t*)dat->data;				//take message as endUpload
 
-		bool rv = false;
+
 		if (msg->checkSum != serverFileCheckSum) {						//ensure proper checksum
 			ASSERT(false);
 		}
@@ -146,11 +155,7 @@
 		rename(tempFileName, msg->fileName);							//rename file with final name
 		dat->currentState = DOWNLOAD_COMPLETE;							//mark state as download complete
 		initializeAcknowledge(dat);										//pack the ack response
-
-		doReturn:
-			return rv;
 	}
-
 
 
 //*****************************************************************************************************************
@@ -158,28 +163,18 @@
 //*************************************    Driver + Overload Procedures    ****************************************
 //*****************************************************************************************************************
 //*****************************************************************************************************************
-	bool processMessage(listenLoopRoutineArgs_t* const dat) {
-		const serverState_t        currentServerState = dat->currentState;
-		const baseMessage_t* const msg = dat->outData.data;
-		const messageType_t        msgType = msg->messageType;
-
-		bool rv = false;
+	void processMessage(listenLoopRoutineArgs_t* const dat) {
 		if (validWaitingCondition(dat)) {
-			rv = processWaiting(dat);
+			processWaiting(dat);
 		} else if (validDownloadingCondition(dat)) {
-			rv = processDownloading(dat);
+			processDownloading(dat);
 		} else if (validFinishedCondition(dat)) {
-			rv = processFinished(dat);
+			processFinished(dat);
 		}
-
-		doReturn:
-			return rv;
 	}
 
 	bool messageSensible(listenLoopRoutineArgs_t* const dat) {
-		const serverState_t        currentServerState = dat->currentState;
-		const baseMessage_t* const msg = dat->outData.data;
-		const messageType_t        msgType = msg->messageType;
+		const baseMessage_t* const msg = (const baseMessage_t*)dat->data;
 
 		bool rv = false;							//sensible if
 		rv = rv || validWaitingCondition(dat);		//wait or
@@ -191,20 +186,16 @@
 		rv = rv && (dat->nextID == msg->messageID);	//and matching ID
 		ASSERT(rv);
 
-		doReturn:
-			return rv;
+		return rv;
 	}
 
 	void issueFailed(listenLoopRoutineArgs_t* const dat) {
-		const serverState_t        currentServerState = dat->currentState;
-		const baseMessage_t* const msg = dat->outData.data;
-		const messageType_t        msgType = msg->messageType;
+		const baseMessage_t* const msg = (const baseMessage_t*)dat->data;
 
 		initializeOutgoing(MESSAGE_FAILED);										//zero buffer and set to failed message
 		messageFailed_t* failedMsg = &outgoingBuffer.asMessageFailed;			//take buffer as messageFailed
 		failedMsg->failedMessageID = msg->messageID;							//set ID of failed message
 	}
-
 
 	bool handleMessage(listenLoopRoutineArgs_t* const incomingMessage, CommunicationBuffer_t** outgoingHandle) {
 		ASSERT(incomingMessage);							//check input ptrs valid
@@ -219,6 +210,5 @@
 		}
 		(*outgoingHandle) = &outgoingBuffer;				//send back pointer to outgoing buffer
 
-		doReturn:
-			return rv;
+		return rv;
 	}
