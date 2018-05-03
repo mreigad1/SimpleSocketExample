@@ -132,7 +132,6 @@
 			LINE_LOG;
 			ssize_t var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
 			LINE_LOG;
-			LINE_LOG;
 			ASSERT(BUF_SIZE == var);	//receive message
 			LINE_LOG;
 			ASSERT(handleMessage(&dat, &outgoingHandle));																			//handle message, by pack outgoing message
