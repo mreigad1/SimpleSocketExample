@@ -59,10 +59,18 @@
 			g_type,
 			g_protocol
 		);
+
+		struct timeval tv;
+		tv.tv_sec = 0;
+		tv.tv_usec = 100 * 1000;
+		if (setsockopt(rcv_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+			perror("Socket set timeout failed");
+		}
+
 		ASSERT(fdesc >= 0);					//error when opening socket fails
 		*fd = fdesc;						//set and return fd if socket properly acquired
-		//doReturn:
-			return rv;
+
+		return rv;
 	}
 
 	// @Procedure - opens and binds socket, provides file
