@@ -124,7 +124,7 @@
 			LINE_LOG;
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 			LINE_LOG;
-			while (BUF_SIZE !=  var) {
+			while (-1 == var) {
 				LINE_LOG;
 				printf("var = %ld\n", var);
 				LINE_LOG;
@@ -140,7 +140,7 @@
 			LINE_LOG;
 			var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
 			printf("var = %ld\n", var);
-			if (BUF_SIZE ==  var) {
+			if (-1 !=  var) {
 				LINE_LOG;
 				ASSERT(handleMessage(&dat, &outgoingHandle));																			//handle message, by pack outgoing message
 				LINE_LOG;
