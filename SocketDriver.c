@@ -64,8 +64,8 @@
 		*fd = fdesc;						//set and return fd if socket properly acquired
 
 		struct timeval tv;
-		tv.tv_sec = 0;
-		tv.tv_usec = 100 * 1000;
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;//100 * 1000;
 		if (setsockopt(fdesc, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
 			perror("Socket set timeout failed");
 		}
