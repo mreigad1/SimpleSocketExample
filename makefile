@@ -1,7 +1,7 @@
 CLIENT_APP=client
 SERVER_APP=server
 
-COMPILATION_FLAGS=-Werror -Wall -Wextra -std=c99 -pedantic -Wmissing-prototypes -Wstrict-prototypes -Wold-style-definition -Wincompatible-pointer-types
+COMPILATION_FLAGS=-Werror -Wall -Wextra -std=c99 -pedantic -Wmissing-prototypes -Wstrict-prototypes -Wold-style-definition -Wincompatible-pointer-types -Wno-missing-field-initializers -Wno-builtin-memcpy-chk-size
 
 CLEANUP_LIST==${CLIENT_APP} ${SERVER_APP}
 

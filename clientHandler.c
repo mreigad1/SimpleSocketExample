@@ -26,7 +26,7 @@
 //********************************************    Local Data    ***************************************************
 //*****************************************************************************************************************
 //*****************************************************************************************************************
-	CommunicationBuffer_t outgoingBuffer = { 0 };
+	CommunicationBuffer_t outgoingBuffer = {{ 0 }};
 	FILE* serverWrittenFile = NULL;
 	const char* uploadFileName = NULL;
 	size_t uploadFileSize = 0;
@@ -138,13 +138,14 @@
 		outgoingBuffer.asEndUpload.checkSum = serverFileCheckSum;
 		LINE_LOG;
 
-		const size_t numWritten = BUF_SIZE - sizeof(endUpload_t) - 1;	//maximum length filename supported
+		//const size_t numWritten = BUF_SIZE - sizeof(endUpload_t) - 1;	//maximum length filename supported
 		LINE_LOG;
-		strncpy(
-			outgoingBuffer.asEndUpload.fileName,
-			"bar.txt",
+		const char* str2 = "bar.txt";
+		memcpy(
+			&outgoingBuffer.asEndUpload.fileName[0],
+			str2,
 			//uploadFileName,
-			numWritten
+			strlen(str2)
 		);
 		LINE_LOG;
 	}

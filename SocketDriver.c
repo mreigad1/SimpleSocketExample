@@ -24,7 +24,7 @@
 	static const int g_type = SOCK_DGRAM;
 	static const int g_protocol = IPPROTO_UDP;
 
-	CommunicationBuffer_t incomingBuffer = { 0 };
+	CommunicationBuffer_t incomingBuffer = {{ 0 }};
 
 //*****************************************************************************************************************
 //*****************************************************************************************************************
