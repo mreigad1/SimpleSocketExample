@@ -118,7 +118,10 @@
 
 		//if client
 		#ifndef IS_SERVER
-			ASSERT(downloadRequest(clientFileName, &outgoingHandle));	//get kickoff message
+			if (!downloadRequest(clientFileName, &outgoingHandle)) {
+				printf("\nFile: %s does not exist or is not available.\n", clientFileName);
+				exit(0);
+			}
 			LINE_LOG;
 			ASSERT(outgoingHandle);
 			LINE_LOG;

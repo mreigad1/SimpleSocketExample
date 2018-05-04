@@ -3,10 +3,10 @@
 
 	#define _BSD_SOURCE
 
-	extern const char* serverIP;
 
 	#ifndef IS_SERVER
 		extern const char* clientFileName;
+		extern const char* serverIP;
 	#endif
 
 	//compile time constants used in project
