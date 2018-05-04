@@ -142,9 +142,9 @@
 			printf("var = %ld\n", var);
 			if (BUF_SIZE ==  var) {
 				LINE_LOG;
-				ASSERT(handleMessage(&dat, &outgoingHandle));																			//handle message, by pack outgoing message
+				handleMessage(&dat, &outgoingHandle);								//handle message, by pack outgoing message
 				LINE_LOG;
-				ASSERT(outgoingHandle);																									//ensure handle to outgoing message
+				ASSERT(outgoingHandle);												//ensure handle to outgoing message
 				LINE_LOG;
 			}
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
