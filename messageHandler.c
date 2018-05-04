@@ -197,7 +197,7 @@
 		//ASSERT(rv);
 		//ASSERT(dat->nextID == msg->messageID);
 		rv = rv && (dat->nextID == msg->messageID);	//and matching ID
-		ASSERT(rv);
+		//ASSERT(rv);
 
 		return rv;
 	}

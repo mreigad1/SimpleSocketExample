@@ -214,8 +214,8 @@
 			processMessage(dat);							//process the ack / send next message
 			LINE_LOG;
 		} else {
-			LINE_LOG;
-			ASSERT(acknowledgedMessageID == dat->nextID);
+			//LINE_LOG;
+			//ASSERT(acknowledgedMessageID == dat->nextID);
 			LINE_LOG;
 			ASSERT(ACKNOWLEDGE == msgType);
 			LINE_LOG;
