@@ -137,7 +137,6 @@
 		endUpload_t* const msg = (endUpload_t*)dat->data;				//take message as endUpload
 
 		if (msg->checkSum != serverFileCheckSum) {						//ensure proper checksum
-			printf("my check = %d, their check = %d\n", (int)serverFileCheckSum, (int)msg->checkSum);
 			ASSERT(false);
 		}
 
@@ -188,16 +187,9 @@
 			const serverState_t        currentServerState = dat->currentState;
 			const baseMessage_t* const msg = (const baseMessage_t*)dat->data;
 			const messageType_t        msgType = msg->messageType;
-			printf("currentServerState = %u\n", currentServerState);
-			printf("msgType = %u\n", msgType);
-			printf("dat->nextID = %ld\n1", dat->nextID);
-			printf("msg->messageID = %ld\n", msg->messageID);
 		}
 
-		//ASSERT(rv);
-		//ASSERT(dat->nextID == msg->messageID);
 		rv = rv && (dat->nextID == msg->messageID);	//and matching ID
-		//ASSERT(rv);
 
 		return rv;
 	}
@@ -217,8 +209,6 @@
 		bool rv = messageSensible(dat);
 		if (rv) {								//check message is valid
 			processMessage(dat);				//process message
-		} else {
-			//issueFailed(dat);					//process message failure
 		}
 		(*outgoingHandle) = &outgoingBuffer;	//send back pointer to outgoing buffer
 

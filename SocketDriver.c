@@ -122,33 +122,20 @@
 				printf("\nFile: %s does not exist or is not available.\n", clientFileName);
 				exit(0);
 			}
-			LINE_LOG;
 			ASSERT(outgoingHandle);
-			LINE_LOG;
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
-			LINE_LOG;
 			while (BUF_SIZE != var) {
-				LINE_LOG;
 				var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
-				LINE_LOG;
 			}
-			LINE_LOG;
 		#endif
 
-		LINE_LOG;
-
 		while (DOWNLOAD_COMPLETE != dat.currentState) {
-			LINE_LOG;
 			var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
 			if (BUF_SIZE ==  var) {
-				LINE_LOG;
 				handleMessage(&dat, &outgoingHandle);								//handle message, by pack outgoing message
-				LINE_LOG;
 				ASSERT(outgoingHandle);												//ensure handle to outgoing message
-				LINE_LOG;
 			}
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
-			LINE_LOG;
 		}
 
 		#ifndef IS_SERVER
