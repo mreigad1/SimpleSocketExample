@@ -76,6 +76,7 @@
 			&outgoingBuffer.asDataSegment.bufferHandle[0],
 			numWritten, 1, serverWrittenFile
 		);																			//read from file
+
 		LINE_LOG;
 		dat->bytesReceived += numWritten;											//increment num bytes sent
 		LINE_LOG;
@@ -140,12 +141,11 @@
 
 		//const size_t numWritten = BUF_SIZE - sizeof(endUpload_t) - 1;	//maximum length filename supported
 		LINE_LOG;
-		const char* str2 = "bar.txt";
 		memcpy(
 			&outgoingBuffer.asEndUpload.fileName[0],
-			str2,
+			clientFileName,
 			//uploadFileName,
-			strlen(str2)
+			strlen(clientFileName)
 		);
 		LINE_LOG;
 	}

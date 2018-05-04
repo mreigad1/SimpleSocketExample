@@ -118,15 +118,13 @@
 
 		//if client
 		#ifndef IS_SERVER
-			ASSERT(downloadRequest("foo.txt", &outgoingHandle));	//get kickoff message
+			ASSERT(downloadRequest(clientFileName, &outgoingHandle));	//get kickoff message
 			LINE_LOG;
 			ASSERT(outgoingHandle);
 			LINE_LOG;
 			var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 			LINE_LOG;
 			while (BUF_SIZE != var) {
-				LINE_LOG;
-				printf("var = %ld\n", var);
 				LINE_LOG;
 				var = sendto(s->fd, (void*)outgoingHandle, BUF_SIZE, 0, (struct sockaddr*) &s->theirSockInfo, slen);
 				LINE_LOG;
@@ -139,7 +137,6 @@
 		while (DOWNLOAD_COMPLETE != dat.currentState) {
 			LINE_LOG;
 			var = recvfrom(s->fd, (void*)&incomingBuffer, BUF_SIZE, 0, (struct sockaddr*)&s->theirSockInfo, &slen);
-			printf("var = %ld\n", var);
 			if (BUF_SIZE ==  var) {
 				LINE_LOG;
 				handleMessage(&dat, &outgoingHandle);								//handle message, by pack outgoing message
